@@ -91,6 +91,7 @@ export const ROUTES = {
   // Public routes
   HOME: '/',
   LOGIN: '/login',
+  SIGNUP: '/signup',
   AUTH_CALLBACK: '/auth/callback',
   
   // Public event page (shareable)

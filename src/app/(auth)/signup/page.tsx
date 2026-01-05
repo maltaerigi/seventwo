@@ -10,22 +10,21 @@ import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/events';
   
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [step, setStep] = useState<'info' | 'otp'>('info');
 
   // Format phone number as user types
   const formatPhone = (value: string) => {
-    // Remove all non-digits
     const digits = value.replace(/\D/g, '');
-    
-    // Format as (XXX) XXX-XXXX
     if (digits.length <= 3) return digits;
     if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
@@ -38,7 +37,6 @@ export default function LoginPage() {
   // Get E.164 format for Supabase
   const getE164Phone = () => {
     const digits = phone.replace(/\D/g, '');
-    // Assuming US numbers, add +1 prefix
     return `+1${digits}`;
   };
 
@@ -51,13 +49,30 @@ export default function LoginPage() {
       return;
     }
 
+    if (!displayName.trim()) {
+      toast.error('Please enter your name');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      toast.error('Please enter a valid email');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       const supabase = createClient();
       
+      // Sign up with phone - Supabase will send OTP
       const { error } = await supabase.auth.signInWithOtp({
         phone: getE164Phone(),
+        options: {
+          data: {
+            display_name: displayName.trim(),
+            email: email.trim(),
+          },
+        },
       });
 
       if (error) {
@@ -67,7 +82,7 @@ export default function LoginPage() {
       setStep('otp');
       toast.success('Verification code sent!');
     } catch (error) {
-      console.error('Send OTP error:', error);
+      console.error('Signup error:', error);
       toast.error('Failed to send code. Please try again.');
     } finally {
       setIsLoading(false);
@@ -87,7 +102,7 @@ export default function LoginPage() {
     try {
       const supabase = createClient();
       
-      const { error } = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         phone: getE164Phone(),
         token: otp,
         type: 'sms',
@@ -97,7 +112,25 @@ export default function LoginPage() {
         throw error;
       }
 
-      toast.success('Welcome!');
+      // Update user metadata with email and display name
+      if (data.user) {
+        await supabase.auth.updateUser({
+          email: email.trim(),
+          data: {
+            display_name: displayName.trim(),
+          },
+        });
+
+        // Update profile
+        await supabase
+          .from('profiles')
+          .update({
+            display_name: displayName.trim(),
+          })
+          .eq('id', data.user.id);
+      }
+
+      toast.success('Account created! Welcome to Seventwo!');
       router.push(redirectTo);
       router.refresh();
     } catch (error) {
@@ -123,15 +156,44 @@ export default function LoginPage() {
 
       {/* Card */}
       <div className="w-full max-w-sm rounded-xl border border-slate-700 bg-slate-800/50 p-8 backdrop-blur">
-        {step === 'phone' ? (
-          // Step 1: Enter phone number
+        {step === 'info' ? (
+          // Step 1: Enter info
           <>
             <div className="mb-6 text-center">
-              <h1 className="text-2xl font-bold text-white">Welcome</h1>
-              <p className="mt-1 text-slate-400">Enter your phone number to continue</p>
+              <h1 className="text-2xl font-bold text-white">Create Account</h1>
+              <p className="mt-1 text-slate-400">Join the poker community</p>
             </div>
 
             <form onSubmit={handleSendOtp} className="space-y-4">
+              <div>
+                <Label htmlFor="displayName" className="text-slate-300">Name</Label>
+                <Input
+                  id="displayName"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Your name"
+                  className="mt-1.5 border-slate-600 bg-slate-700/50 text-white placeholder:text-slate-500"
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="email" className="text-slate-300">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-1.5 border-slate-600 bg-slate-700/50 text-white placeholder:text-slate-500"
+                  disabled={isLoading}
+                  required
+                />
+                <p className="mt-1 text-xs text-slate-500">For receipts and important updates</p>
+              </div>
+
               <div>
                 <Label htmlFor="phone" className="text-slate-300">Phone Number</Label>
                 <div className="mt-1.5 flex">
@@ -150,6 +212,7 @@ export default function LoginPage() {
                     required
                   />
                 </div>
+                <p className="mt-1 text-xs text-slate-500">Used for quick sign-in</p>
               </div>
 
               <Button
@@ -157,20 +220,16 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
               >
-                {isLoading ? 'Sending...' : 'Send Code'}
+                {isLoading ? 'Sending...' : 'Continue'}
               </Button>
             </form>
 
-            <p className="mt-6 text-center text-xs text-slate-500">
-              We&apos;ll send you a verification code via SMS.
-            </p>
-
-            {/* Sign up link */}
+            {/* Login link */}
             <div className="mt-6 border-t border-slate-700 pt-6 text-center">
               <p className="text-sm text-slate-400">
-                New to Seventwo?{' '}
-                <Link href="/signup" className="text-amber-400 hover:underline">
-                  Create account
+                Already have an account?{' '}
+                <Link href="/login" className="text-amber-400 hover:underline">
+                  Sign in
                 </Link>
               </p>
             </div>
@@ -179,9 +238,9 @@ export default function LoginPage() {
           // Step 2: Enter OTP
           <>
             <div className="mb-6 text-center">
-              <h1 className="text-2xl font-bold text-white">Enter Code</h1>
+              <h1 className="text-2xl font-bold text-white">Verify Phone</h1>
               <p className="mt-1 text-slate-400">
-                Sent to {phone}
+                Enter the code sent to {phone}
               </p>
             </div>
 
@@ -208,7 +267,7 @@ export default function LoginPage() {
                 disabled={isLoading || otp.length !== 6}
                 className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
               >
-                {isLoading ? 'Verifying...' : 'Verify'}
+                {isLoading ? 'Creating account...' : 'Create Account'}
               </Button>
             </form>
 
@@ -216,12 +275,12 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setStep('phone');
+                  setStep('info');
                   setOtp('');
                 }}
                 className="text-slate-400 hover:text-white"
               >
-                Change number
+                Go back
               </button>
               <button
                 type="button"
@@ -246,3 +305,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

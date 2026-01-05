@@ -29,6 +29,8 @@ export interface Profile {
   id: string; // UUID, references auth.users.id
   display_name: string | null;
   avatar_url: string | null;
+  phone: string | null; // E.164 format (+1XXXXXXXXXX)
+  email: string | null;
   total_games_played: number;
   total_profit_loss: number; // Decimal stored as number
   created_at: string; // ISO timestamp
