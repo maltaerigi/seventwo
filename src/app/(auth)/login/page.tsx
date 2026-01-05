@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -9,45 +9,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { APP_URL } from '@/constants';
 
 export default function LoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/events';
   
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+  const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [emailSent, setEmailSent] = useState(false);
 
-  // Format phone number as user types
-  const formatPhone = (value: string) => {
-    // Remove all non-digits
-    const digits = value.replace(/\D/g, '');
-    
-    // Format as (XXX) XXX-XXXX
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-  };
-
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPhone(formatPhone(e.target.value));
-  };
-
-  // Get E.164 format for Supabase
-  const getE164Phone = () => {
-    const digits = phone.replace(/\D/g, '');
-    // Assuming US numbers, add +1 prefix
-    return `+1${digits}`;
-  };
-
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length !== 10) {
-      toast.error('Please enter a valid 10-digit phone number');
+    if (!email) {
+      toast.error('Please enter your email');
       return;
     }
 
@@ -57,52 +33,21 @@ export default function LoginPage() {
       const supabase = createClient();
       
       const { error } = await supabase.auth.signInWithOtp({
-        phone: getE164Phone(),
+        email,
+        options: {
+          emailRedirectTo: `${APP_URL}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
+        },
       });
 
       if (error) {
         throw error;
       }
 
-      setStep('otp');
-      toast.success('Verification code sent!');
+      setEmailSent(true);
+      toast.success('Check your email for the magic link!');
     } catch (error) {
-      console.error('Send OTP error:', error);
-      toast.error('Failed to send code. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (otp.length !== 6) {
-      toast.error('Please enter the 6-digit code');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const supabase = createClient();
-      
-      const { error } = await supabase.auth.verifyOtp({
-        phone: getE164Phone(),
-        token: otp,
-        type: 'sms',
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      toast.success('Welcome!');
-      router.push(redirectTo);
-      router.refresh();
-    } catch (error) {
-      console.error('Verify OTP error:', error);
-      toast.error('Invalid code. Please try again.');
+      console.error('Login error:', error);
+      toast.error('Failed to send magic link. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -123,33 +68,53 @@ export default function LoginPage() {
 
       {/* Card */}
       <div className="w-full max-w-sm rounded-xl border border-slate-700 bg-slate-800/50 p-8 backdrop-blur">
-        {step === 'phone' ? (
-          // Step 1: Enter phone number
+        {emailSent ? (
+          // Success state
+          <div className="text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
+              <svg className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-white">Check your email</h2>
+            <p className="mt-2 text-slate-400">
+              We sent a magic link to <strong className="text-white">{email}</strong>
+            </p>
+            <p className="mt-4 text-sm text-slate-500">
+              Click the link in the email to sign in.
+            </p>
+            <Button
+              variant="ghost"
+              className="mt-6 text-slate-400 hover:text-white"
+              onClick={() => {
+                setEmailSent(false);
+                setEmail('');
+              }}
+            >
+              Use a different email
+            </Button>
+          </div>
+        ) : (
+          // Login form
           <>
             <div className="mb-6 text-center">
-              <h1 className="text-2xl font-bold text-white">Welcome</h1>
-              <p className="mt-1 text-slate-400">Enter your phone number to continue</p>
+              <h1 className="text-2xl font-bold text-white">Welcome back</h1>
+              <p className="mt-1 text-slate-400">Sign in with your email</p>
             </div>
 
-            <form onSubmit={handleSendOtp} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label htmlFor="phone" className="text-slate-300">Phone Number</Label>
-                <div className="mt-1.5 flex">
-                  <span className="inline-flex items-center rounded-l-md border border-r-0 border-slate-600 bg-slate-700 px-3 text-sm text-slate-400">
-                    +1
-                  </span>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={phone}
-                    onChange={handlePhoneChange}
-                    placeholder="(555) 123-4567"
-                    className="rounded-l-none border-slate-600 bg-slate-700/50 text-white placeholder:text-slate-500"
-                    disabled={isLoading}
-                    maxLength={14}
-                    required
-                  />
-                </div>
+                <Label htmlFor="email" className="text-slate-300">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-1.5 border-slate-600 bg-slate-700/50 text-white placeholder:text-slate-500"
+                  disabled={isLoading}
+                  required
+                />
               </div>
 
               <Button
@@ -157,12 +122,12 @@ export default function LoginPage() {
                 disabled={isLoading}
                 className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
               >
-                {isLoading ? 'Sending...' : 'Send Code'}
+                {isLoading ? 'Sending...' : 'Send Magic Link'}
               </Button>
             </form>
 
             <p className="mt-6 text-center text-xs text-slate-500">
-              We&apos;ll send you a verification code via SMS.
+              No password needed. We&apos;ll email you a secure link.
             </p>
 
             {/* Sign up link */}
@@ -173,64 +138,6 @@ export default function LoginPage() {
                   Create account
                 </Link>
               </p>
-            </div>
-          </>
-        ) : (
-          // Step 2: Enter OTP
-          <>
-            <div className="mb-6 text-center">
-              <h1 className="text-2xl font-bold text-white">Enter Code</h1>
-              <p className="mt-1 text-slate-400">
-                Sent to {phone}
-              </p>
-            </div>
-
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <div>
-                <Label htmlFor="otp" className="text-slate-300">Verification Code</Label>
-                <Input
-                  id="otp"
-                  type="text"
-                  inputMode="numeric"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="123456"
-                  className="mt-1.5 text-center text-2xl tracking-widest border-slate-600 bg-slate-700/50 text-white placeholder:text-slate-500"
-                  disabled={isLoading}
-                  maxLength={6}
-                  required
-                  autoFocus
-                />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={isLoading || otp.length !== 6}
-                className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
-              >
-                {isLoading ? 'Verifying...' : 'Verify'}
-              </Button>
-            </form>
-
-            <div className="mt-6 flex justify-center gap-4 text-sm">
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('phone');
-                  setOtp('');
-                }}
-                className="text-slate-400 hover:text-white"
-              >
-                Change number
-              </button>
-              <button
-                type="button"
-                onClick={handleSendOtp}
-                disabled={isLoading}
-                className="text-amber-400 hover:underline disabled:opacity-50"
-              >
-                Resend code
-              </button>
             </div>
           </>
         )}
