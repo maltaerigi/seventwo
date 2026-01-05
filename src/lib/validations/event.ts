@@ -56,6 +56,11 @@ export const createEventSchema = z.object({
     .default(DEFAULT_MAX_SEATS),
   
   requires_approval: z.boolean().default(false),
+  
+  cover_photo_url: z
+    .string()
+    .nullable()
+    .optional(),
 }).refine(
   (data) => data.big_blind >= data.small_blind,
   {

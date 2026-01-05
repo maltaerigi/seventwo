@@ -113,6 +113,13 @@ export interface CheckInRequest {
 export interface RecordBuyInRequest {
   participant_id: string;
   amount: number;
+  notes?: string;
+}
+
+export interface RecordRebuyRequest {
+  participant_id: string;
+  amount: number;
+  notes?: string;
 }
 
 export interface RecordCashOutRequest {
@@ -120,9 +127,56 @@ export interface RecordCashOutRequest {
   amount: number;
 }
 
+export interface UpdateLedgerEntryRequest {
+  entry_id: string;
+  amount?: number;
+  notes?: string | null;
+}
+
+export interface DeleteLedgerEntryRequest {
+  entry_id: string;
+}
+
 export interface ApproveParticipantRequest {
   participant_id: string;
   approved: boolean;
+}
+
+// ============================================
+// Ledger API Types
+// ============================================
+
+/**
+ * Participant summary in ledger
+ */
+export interface LedgerParticipantSummary {
+  participant_id: string;
+  user_id: string;
+  display_name: string;
+  initial_buy_in: number;
+  total_rebuys: number;
+  rebuy_count: number;
+  total_buy_in: number;
+  cash_out: number | null;
+  net_profit_loss: number;
+  is_cashed_out: boolean;
+}
+
+/**
+ * Event ledger summary response
+ */
+export interface EventLedgerResponse {
+  event_id: string;
+  total_buy_ins: number;
+  total_cash_outs: number;
+  money_still_in_play: number;
+  balance_check: number;
+  is_balanced: boolean;
+  participants_count: number;
+  participants_cashed_out: number;
+  participants_still_playing: number;
+  can_settle: boolean;
+  participants: LedgerParticipantSummary[];
 }
 
 // ============================================
@@ -141,6 +195,15 @@ export interface Debt {
 }
 
 /**
+ * Winner/Loser in settlement
+ */
+export interface SettlementParticipant {
+  user_id: string;
+  user_name: string;
+  amount: number; // Positive for winners, represents profit/loss
+}
+
+/**
  * Result of debt calculation for an event
  */
 export interface DebtCalculationResult {
@@ -148,6 +211,25 @@ export interface DebtCalculationResult {
   debts: Debt[];
   total_pot: number;
   participants_count: number;
+  winners: SettlementParticipant[];
+  losers: SettlementParticipant[];
+}
+
+/**
+ * Settlement request
+ */
+export interface SettleEventRequest {
+  event_id: string;
+}
+
+/**
+ * Settlement response
+ */
+export interface SettleEventResponse {
+  event_id: string;
+  status: 'completed';
+  debts_created: number;
+  debts: Debt[];
 }
 
 // ============================================

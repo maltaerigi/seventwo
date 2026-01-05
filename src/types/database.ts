@@ -70,8 +70,9 @@ export interface EventParticipant {
   event_id: string; // UUID, references events.id
   user_id: string; // UUID, references profiles.id
   checked_in_at: string | null; // ISO timestamp
-  buy_in_amount: number; // Decimal
+  buy_in_amount: number; // Decimal - auto-calculated from ledger entries
   cash_out_amount: number | null; // Decimal
+  cashed_out_at: string | null; // ISO timestamp - when player left
   net_profit_loss: number; // Calculated: cash_out - buy_in
   status: ParticipantStatus;
   created_at: string;
@@ -101,6 +102,19 @@ export interface NewsletterSubscriber {
   email: string;
   subscribed_at: string; // ISO timestamp
   unsubscribed_at: string | null;
+}
+
+/**
+ * Buy-in ledger entry - tracks individual buy-ins/rebuys
+ * A participant can have multiple entries (initial buy-in + rebuys)
+ */
+export interface BuyInLedgerEntry {
+  id: string; // UUID
+  participant_id: string; // UUID, references event_participants.id
+  amount: number; // Decimal
+  is_rebuy: boolean;
+  notes: string | null;
+  created_at: string; // ISO timestamp
 }
 
 // ============================================
@@ -136,6 +150,13 @@ export type NewsletterSubscriberInsert = Omit<NewsletterSubscriber, 'id' | 'subs
   id?: string;
   subscribed_at?: string;
 };
+
+export type BuyInLedgerInsert = Omit<BuyInLedgerEntry, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
+export type BuyInLedgerUpdate = Partial<Omit<BuyInLedgerEntry, 'id' | 'participant_id' | 'created_at'>>;
 
 // ============================================
 // Update Types (for updating existing records)
@@ -192,5 +213,27 @@ export interface UserGameResult {
 export interface TransactionWithUsers extends EventTransaction {
   from_user: Pick<Profile, 'id' | 'display_name' | 'avatar_url'>;
   to_user: Pick<Profile, 'id' | 'display_name' | 'avatar_url'>;
+}
+
+/**
+ * Participant with full ledger details
+ */
+export interface ParticipantWithLedger extends EventParticipant {
+  profile: Pick<Profile, 'id' | 'display_name' | 'avatar_url'>;
+  buy_in_ledger: BuyInLedgerEntry[];
+}
+
+/**
+ * Event ledger summary - complete overview of money in/out
+ */
+export interface EventLedgerSummary {
+  event_id: string;
+  total_buy_ins: number;
+  total_cash_outs: number;
+  balance_check: number; // Should be 0 when all cashed out
+  participants_count: number;
+  participants_cashed_out: number;
+  participants_still_playing: number;
+  participants: ParticipantWithLedger[];
 }
 

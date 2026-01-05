@@ -8,10 +8,14 @@
  * How it works:
  * 1. Calculate net profit/loss for each participant
  * 2. Split participants into winners (positive) and losers (negative)
- * 3. Match winners with losers to minimize transactions
+ * 3. Match losers with winners using greedy algorithm to minimize transactions
+ * 
+ * The greedy approach pairs the biggest loser with the biggest winner,
+ * settling as much as possible before moving to the next pair.
+ * This typically results in N-1 transactions for N participants.
  */
 
-import type { EventParticipant, Profile } from '@/types';
+import type { EventParticipant, Profile, ParticipantWithLedger } from '@/types';
 
 /**
  * Represents a debt between two users
@@ -39,6 +43,8 @@ export interface DebtCalculationResult {
   totalPot: number;
   participantsCount: number;
   balanceCheck: number; // Should be 0 if math is correct
+  winners: { userId: string; userName: string; profit: number }[];
+  losers: { userId: string; userName: string; loss: number }[];
 }
 
 /**
@@ -160,7 +166,36 @@ export function calculateDebts(
     totalPot: roundToTwoDecimals(totalPot),
     participantsCount: completedParticipants.length,
     balanceCheck: roundToTwoDecimals(balanceCheck),
+    winners: winners.map(w => ({
+      userId: w.userId,
+      userName: w.userName,
+      profit: roundToTwoDecimals(balances.find(b => b.userId === w.userId)?.balance ?? 0),
+    })),
+    losers: losers.map(l => ({
+      userId: l.userId,
+      userName: l.userName,
+      loss: roundToTwoDecimals(l.balance),
+    })),
   };
+}
+
+/**
+ * Calculate debts from participants with ledger data
+ * This version works with the new buy_in_ledger system
+ */
+export function calculateDebtsFromLedger(
+  participants: ParticipantWithLedger[]
+): DebtCalculationResult {
+  // Convert to the format expected by calculateDebts
+  const participantsWithProfile: ParticipantWithProfile[] = participants.map(p => ({
+    ...p,
+    profile: {
+      id: p.profile.id,
+      display_name: p.profile.display_name,
+    },
+  }));
+  
+  return calculateDebts(participantsWithProfile);
 }
 
 /**
