@@ -136,8 +136,7 @@ interface SessionBarChartProps {
   range: number;
 }
 
-function SessionBarChart({ data, maxValue, minValue, range }: SessionBarChartProps) {
-  const chartHeight = 200;
+function SessionBarChart({ data, maxValue, range }: SessionBarChartProps) {
   const zeroLine = maxValue / range;
 
   return (

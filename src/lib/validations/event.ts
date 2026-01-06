@@ -9,9 +9,9 @@ import { z } from 'zod';
 import { VALIDATION, DEFAULT_SMALL_BLIND, DEFAULT_BIG_BLIND, DEFAULT_MAX_SEATS, MIN_SEATS, MAX_SEATS } from '@/constants';
 
 /**
- * Schema for creating a new event
+ * Base event schema without refinements (used for partial updates)
  */
-export const createEventSchema = z.object({
+const baseEventSchema = z.object({
   title: z
     .string()
     .min(VALIDATION.TITLE_MIN_LENGTH, `Title must be at least ${VALIDATION.TITLE_MIN_LENGTH} characters`)
@@ -61,7 +61,12 @@ export const createEventSchema = z.object({
     .string()
     .nullable()
     .optional(),
-}).refine(
+});
+
+/**
+ * Schema for creating a new event (with refinement for blind validation)
+ */
+export const createEventSchema = baseEventSchema.refine(
   (data) => data.big_blind >= data.small_blind,
   {
     message: 'Big blind must be greater than or equal to small blind',
@@ -72,9 +77,9 @@ export const createEventSchema = z.object({
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 
 /**
- * Schema for updating an event
+ * Schema for updating an event (partial, uses base schema without refinement)
  */
-export const updateEventSchema = createEventSchema.partial().extend({
+export const updateEventSchema = baseEventSchema.partial().extend({
   status: z.enum(['upcoming', 'active', 'completed']).optional(),
 });
 

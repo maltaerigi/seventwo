@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -11,7 +11,25 @@ import { toast } from 'sonner';
 
 type Step = 'phone' | 'otp';
 
+// Wrapper component to handle Suspense for useSearchParams
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageSkeleton />}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageSkeleton() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-emerald-950 via-emerald-900 to-slate-900 px-4 py-12">
+      <div className="h-[114px] w-[200px] animate-pulse rounded bg-slate-700/50" />
+      <div className="mt-8 h-[500px] w-full max-w-sm animate-pulse rounded-xl bg-slate-800/50" />
+    </div>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/events';
@@ -109,8 +127,8 @@ export default function LoginPage() {
       }
 
       toast.success('Welcome back!');
-      router.push(redirectTo);
-      router.refresh();
+      // Use full page navigation to ensure cookies are read properly
+      window.location.href = redirectTo;
     } catch (error) {
       console.error('Verify OTP error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to verify code');

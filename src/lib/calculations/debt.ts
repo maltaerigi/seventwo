@@ -87,6 +87,8 @@ export function calculateDebts(
       totalPot: 0,
       participantsCount: 0,
       balanceCheck: 0,
+      winners: [],
+      losers: [],
     };
   }
 

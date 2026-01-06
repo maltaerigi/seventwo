@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -11,8 +11,25 @@ import { toast } from 'sonner';
 
 type Step = 'info' | 'otp';
 
+// Wrapper component to handle Suspense for useSearchParams
 export default function SignupPage() {
-  const router = useRouter();
+  return (
+    <Suspense fallback={<SignupPageSkeleton />}>
+      <SignupPageContent />
+    </Suspense>
+  );
+}
+
+function SignupPageSkeleton() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-emerald-950 via-emerald-900 to-slate-900 px-4 py-12">
+      <div className="h-[114px] w-[200px] animate-pulse rounded bg-slate-700/50" />
+      <div className="mt-8 h-[600px] w-full max-w-sm animate-pulse rounded-xl bg-slate-800/50" />
+    </div>
+  );
+}
+
+function SignupPageContent() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/events';
   const prefilledPhone = searchParams.get('phone') || '';
@@ -123,8 +140,8 @@ export default function SignupPage() {
       }
 
       toast.success('Account created! Welcome to Seventwo!');
-      router.push(redirectTo);
-      router.refresh();
+      // Use full page navigation to ensure cookies are read properly
+      window.location.href = redirectTo;
     } catch (error) {
       console.error('Verify OTP error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to verify code');

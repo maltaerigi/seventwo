@@ -199,7 +199,6 @@ export default async function PublicEventPage({ params, searchParams }: PublicEv
   }
 
   const isFull = (participantCount || 0) >= typedEvent.max_seats;
-  const _canJoin = user && !userParticipant && !isFull && typedEvent.status !== 'completed';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
@@ -318,7 +317,7 @@ export default async function PublicEventPage({ params, searchParams }: PublicEv
             </h3>
             <div className="flex flex-wrap gap-2">
               {participantPreview.map((p) => {
-                const profile = p.profile as Pick<Profile, 'id' | 'display_name' | 'avatar_url'> | null;
+                const profile = p.profile as unknown as Pick<Profile, 'id' | 'display_name' | 'avatar_url'> | null;
                 if (!profile) return null;
                 return (
                   <div

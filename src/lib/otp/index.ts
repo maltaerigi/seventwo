@@ -23,7 +23,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 // Configuration
 // ============================================
 
-const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 10;
 const MAX_ATTEMPTS = 3;
 
