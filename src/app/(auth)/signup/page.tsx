@@ -1,26 +1,51 @@
 'use client';
 
-import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { APP_URL } from '@/constants';
+
+type Step = 'info' | 'otp';
 
 export default function SignupPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/events';
+  const prefilledPhone = searchParams.get('phone') || '';
   
+  const [step, setStep] = useState<Step>('info');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState(prefilledPhone);
+  const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+  const [mockCode, setMockCode] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // If phone is prefilled, focus on name field
+  useEffect(() => {
+    if (prefilledPhone) {
+      setPhone(prefilledPhone);
+    }
+  }, [prefilledPhone]);
+
+  // Format phone for display
+  const formatPhoneDisplay = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setPhone(digits);
+  };
+
+  const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!displayName.trim()) {
@@ -28,35 +53,105 @@ export default function SignupPage() {
       return;
     }
 
-    if (!email) {
-      toast.error('Please enter your email');
+    if (phone.length !== 10) {
+      toast.error('Please enter a valid 10-digit phone number');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const supabase = createClient();
-      
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${APP_URL}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
-          data: {
-            display_name: displayName.trim(),
-          },
-        },
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: `+1${phone}` }),
       });
 
-      if (error) {
-        throw error;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send code');
       }
 
-      setEmailSent(true);
-      toast.success('Check your email to complete signup!');
+      // Store mock code for development display
+      if (data.mockCode) {
+        setMockCode(data.mockCode);
+      }
+
+      setStep('otp');
+      toast.success('Verification code sent!');
     } catch (error) {
-      console.error('Signup error:', error);
-      toast.error('Failed to send magic link. Please try again.');
+      console.error('Send OTP error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to send verification code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (otp.length !== 6) {
+      toast.error('Please enter the 6-digit code');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: `+1${phone}`,
+          code: otp,
+          displayName: displayName.trim(),
+          email: email.trim() || undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to verify code');
+      }
+
+      toast.success('Account created! Welcome to Seventwo!');
+      router.push(redirectTo);
+      router.refresh();
+    } catch (error) {
+      console.error('Verify OTP error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to verify code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setOtp('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: `+1${phone}` }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to resend code');
+      }
+
+      if (data.mockCode) {
+        setMockCode(data.mockCode);
+      }
+
+      toast.success('New code sent!');
+    } catch (error) {
+      console.error('Resend OTP error:', error);
+      toast.error('Failed to resend code');
     } finally {
       setIsLoading(false);
     }
@@ -77,42 +172,15 @@ export default function SignupPage() {
 
       {/* Card */}
       <div className="w-full max-w-sm rounded-xl border border-slate-700 bg-slate-800/50 p-8 backdrop-blur">
-        {emailSent ? (
-          // Success state
-          <div className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-              <svg className="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-semibold text-white">Check your email</h2>
-            <p className="mt-2 text-slate-400">
-              We sent a magic link to <strong className="text-white">{email}</strong>
-            </p>
-            <p className="mt-4 text-sm text-slate-500">
-              Click the link in the email to create your account.
-            </p>
-            <Button
-              variant="ghost"
-              className="mt-6 text-slate-400 hover:text-white"
-              onClick={() => {
-                setEmailSent(false);
-                setEmail('');
-                setDisplayName('');
-              }}
-            >
-              Use a different email
-            </Button>
-          </div>
-        ) : (
-          // Signup form
+        {step === 'info' ? (
+          // Step 1: Enter Info & Phone
           <>
             <div className="mb-6 text-center">
               <h1 className="text-2xl font-bold text-white">Create Account</h1>
               <p className="mt-1 text-slate-400">Join the poker community</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSendOTP} className="space-y-4">
               <div>
                 <Label htmlFor="displayName" className="text-slate-300">Name</Label>
                 <Input
@@ -123,12 +191,15 @@ export default function SignupPage() {
                   placeholder="Your name"
                   className="mt-1.5 border-slate-600 bg-slate-700/50 text-white placeholder:text-slate-500"
                   disabled={isLoading}
+                  autoFocus
                   required
                 />
               </div>
 
               <div>
-                <Label htmlFor="email" className="text-slate-300">Email</Label>
+                <Label htmlFor="email" className="text-slate-300">
+                  Email <span className="text-slate-500">(optional)</span>
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -137,21 +208,40 @@ export default function SignupPage() {
                   placeholder="you@example.com"
                   className="mt-1.5 border-slate-600 bg-slate-700/50 text-white placeholder:text-slate-500"
                   disabled={isLoading}
-                  required
                 />
+                <p className="mt-1 text-xs text-slate-500">For notifications & event invites</p>
+              </div>
+
+              <div>
+                <Label htmlFor="phone" className="text-slate-300">Phone Number</Label>
+                <div className="mt-1.5 flex">
+                  <span className="inline-flex items-center rounded-l-md border border-r-0 border-slate-600 bg-slate-700 px-3 text-slate-400">
+                    +1
+                  </span>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={formatPhoneDisplay(phone)}
+                    onChange={handlePhoneChange}
+                    placeholder="(555) 555-5555"
+                    className="rounded-l-none border-slate-600 bg-slate-700/50 text-white placeholder:text-slate-500"
+                    disabled={isLoading}
+                    required
+                  />
+                </div>
               </div>
 
               <Button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || !displayName.trim() || phone.length !== 10}
                 className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
               >
-                {isLoading ? 'Sending...' : 'Create Account'}
+                {isLoading ? 'Sending...' : 'Send Verification Code'}
               </Button>
             </form>
 
             <p className="mt-6 text-center text-xs text-slate-500">
-              We&apos;ll email you a magic link to complete signup.
+              We&apos;ll text you a code to verify your number.
             </p>
 
             {/* Login link */}
@@ -162,6 +252,76 @@ export default function SignupPage() {
                   Sign in
                 </Link>
               </p>
+            </div>
+          </>
+        ) : (
+          // Step 2: Enter OTP
+          <>
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20">
+                <svg className="h-8 w-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-white">Enter verification code</h2>
+              <p className="mt-2 text-slate-400">
+                Sent to <strong className="text-white">+1 {formatPhoneDisplay(phone)}</strong>
+              </p>
+              {mockCode && (
+                <p className="mt-2 rounded bg-amber-500/20 px-3 py-1 text-sm text-amber-400">
+                  Dev mode: Use code <strong>{mockCode}</strong>
+                </p>
+              )}
+            </div>
+
+            <form onSubmit={handleVerifyOTP} className="space-y-4">
+              <div>
+                <Label htmlFor="otp" className="text-slate-300">6-digit code</Label>
+                <Input
+                  id="otp"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  className="mt-1.5 border-slate-600 bg-slate-700/50 text-center text-2xl tracking-[0.5em] text-white placeholder:text-slate-500"
+                  disabled={isLoading}
+                  autoFocus
+                  required
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isLoading || otp.length !== 6}
+                className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
+              >
+                {isLoading ? 'Creating Account...' : 'Create Account'}
+              </Button>
+            </form>
+
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={isLoading}
+                className="text-sm text-slate-400 hover:text-white disabled:opacity-50"
+              >
+                Didn&apos;t get the code? Resend
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('info');
+                  setOtp('');
+                  setMockCode(null);
+                }}
+                className="text-sm text-slate-400 hover:text-white"
+              >
+                ← Go back
+              </button>
             </div>
           </>
         )}

@@ -29,3 +29,6 @@ export { createClient as createServerClient } from './server';
 // Export middleware helper
 export { updateSession } from './middleware';
 
+// Export admin client for server-side admin operations
+export { createAdminClient } from './admin';
+

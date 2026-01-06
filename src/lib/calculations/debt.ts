@@ -43,8 +43,8 @@ export interface DebtCalculationResult {
   totalPot: number;
   participantsCount: number;
   balanceCheck: number; // Should be 0 if math is correct
-  winners: { userId: string; userName: string; profit: number }[];
-  losers: { userId: string; userName: string; loss: number }[];
+  winners: { userId: string; userName: string; amount: number }[];
+  losers: { userId: string; userName: string; amount: number }[];
 }
 
 /**
@@ -166,15 +166,18 @@ export function calculateDebts(
     totalPot: roundToTwoDecimals(totalPot),
     participantsCount: completedParticipants.length,
     balanceCheck: roundToTwoDecimals(balanceCheck),
-    winners: winners.map(w => ({
-      userId: w.userId,
-      userName: w.userName,
-      profit: roundToTwoDecimals(balances.find(b => b.userId === w.userId)?.balance ?? 0),
-    })),
+    winners: winners.map(w => {
+      const balance = balances.find(b => b.userId === w.userId);
+      return {
+        userId: w.userId,
+        userName: w.userName,
+        amount: roundToTwoDecimals(balance?.balance ?? 0),
+      };
+    }),
     losers: losers.map(l => ({
       userId: l.userId,
       userName: l.userName,
-      loss: roundToTwoDecimals(l.balance),
+      amount: roundToTwoDecimals(l.balance),
     })),
   };
 }

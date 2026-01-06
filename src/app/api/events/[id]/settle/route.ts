@@ -188,19 +188,26 @@ export async function POST(
 
     // Update participant profiles with game results
     for (const participant of participantsWithLedger) {
-      const { error: profileUpdateError } = await supabase
+      // Get current profile stats
+      const { data: currentProfile } = await supabase
         .from('profiles')
-        .update({
-          total_games_played: supabase.rpc('increment_games_played'),
-          total_profit_loss: supabase.rpc('add_profit_loss', { 
-            amount: participant.net_profit_loss 
-          }),
-        })
-        .eq('id', participant.user_id);
+        .select('total_games_played, total_profit_loss')
+        .eq('id', participant.user_id)
+        .single();
 
-      if (profileUpdateError) {
-        // Log but don't fail - this is non-critical
-        console.error('Error updating profile stats:', profileUpdateError);
+      if (currentProfile) {
+        const { error: profileUpdateError } = await supabase
+          .from('profiles')
+          .update({
+            total_games_played: (currentProfile.total_games_played || 0) + 1,
+            total_profit_loss: (currentProfile.total_profit_loss || 0) + participant.net_profit_loss,
+          })
+          .eq('id', participant.user_id);
+
+        if (profileUpdateError) {
+          // Log but don't fail - this is non-critical
+          console.error('Error updating profile stats:', profileUpdateError);
+        }
       }
     }
 
