@@ -63,48 +63,35 @@ console.log('=' .repeat(70));
 
 // Create a realistic poker scenario with 8 players
 // Scenario: $100 buy-in tournament with rebuys
-// Total buy-ins: $1400, so total cash-outs must equal $1400
+// Total buy-ins: 100+150+200+200+150+200+250+150 = $1400
+// We'll distribute cash-outs so they balance to $1400 total
 const participants = [
   // Player 1: Big winner - bought in once, cashed out big
-  createMockParticipant('p1', 'u1', 'Alice', [100], 450),
+  createMockParticipant('p1', 'u1', 'Alice', [100], 400),        // +300 (100 in)
   
   // Player 2: Moderate winner - rebought once, did well
-  createMockParticipant('p2', 'u2', 'Bob', [100, 50], 280),
+  createMockParticipant('p2', 'u2', 'Bob', [100, 50], 250),      // +100 (150 in)
   
   // Player 3: Small winner - rebought twice, barely profitable
-  createMockParticipant('p3', 'u3', 'Charlie', [100, 50, 50], 220),
+  createMockParticipant('p3', 'u3', 'Charlie', [100, 50, 50], 200), // 0 (200 in)
   
   // Player 4: Break even - rebought once, got back to even
-  createMockParticipant('p4', 'u4', 'Diana', [100, 100], 200),
+  createMockParticipant('p4', 'u4', 'Diana', [100, 100], 200),   // 0 (200 in)
   
   // Player 5: Small loser - rebought once, lost a bit
-  createMockParticipant('p5', 'u5', 'Eve', [100, 50], 120),
+  createMockParticipant('p5', 'u5', 'Eve', [100, 50], 100),      // -50 (150 in)
   
   // Player 6: Moderate loser - rebought twice, lost more
-  createMockParticipant('p6', 'u6', 'Frank', [100, 50, 50], 150),
+  createMockParticipant('p6', 'u6', 'Frank', [100, 50, 50], 120), // -80 (200 in)
   
   // Player 7: Big loser - rebought multiple times, lost big
-  createMockParticipant('p7', 'u7', 'Grace', [100, 100, 50], 80),
+  createMockParticipant('p7', 'u7', 'Grace', [100, 100, 50], 70), // -180 (250 in)
   
   // Player 8: Still playing (hasn't cashed out yet)
-  // Will cash out with: 1400 - (450+280+220+200+120+150+80) = -150 (but we'll fix this)
-  createMockParticipant('p8', 'u8', 'Henry', [100, 50], null),
+  // Will cash out with: 1400 - (400+250+200+200+100+120+70) = 60 (loses 90)
+  createMockParticipant('p8', 'u8', 'Henry', [100, 50], null),    // -90 (150 in)
 ];
-
-// Adjust cash-outs to balance properly
-// Total buy-ins: 100 + 150 + 200 + 200 + 150 + 200 + 250 + 150 = 1400
-// Let's redistribute so it balances:
-const balancedParticipants = [
-  createMockParticipant('p1', 'u1', 'Alice', [100], 400),        // +300
-  createMockParticipant('p2', 'u2', 'Bob', [100, 50], 250),      // +100
-  createMockParticipant('p3', 'u3', 'Charlie', [100, 50, 50], 200), // 0
-  createMockParticipant('p4', 'u4', 'Diana', [100, 100], 200),   // 0
-  createMockParticipant('p5', 'u5', 'Eve', [100, 50], 100),      // -50
-  createMockParticipant('p6', 'u6', 'Frank', [100, 50, 50], 120), // -80
-  createMockParticipant('p7', 'u7', 'Grace', [100, 100, 50], 70), // -180
-  createMockParticipant('p8', 'u8', 'Henry', [100, 50], null),    // Will be -90
-];
-// Total: 400+250+200+200+100+120+70 = 1340, so Henry gets 60 (loses 90)
+// Total cash-outs (when Henry cashes): 400+250+200+200+100+120+70+60 = 1400 ✓
 
 console.log('\n📋 Participant Details:\n');
 participants.forEach((p, i) => {

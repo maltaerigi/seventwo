@@ -102,6 +102,12 @@ export default function LoginPage() {
         throw new Error(data.error || 'Failed to verify code');
       }
 
+      // If redirectUrl is provided, use it (fallback for session creation)
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+        return;
+      }
+
       toast.success('Welcome back!');
       router.push(redirectTo);
       router.refresh();

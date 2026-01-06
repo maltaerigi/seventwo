@@ -56,8 +56,26 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Send OTP error:', error);
+    
+    // Provide more helpful error messages
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    if (errorMessage.includes('SUPABASE_SERVICE_ROLE_KEY')) {
+      return NextResponse.json(
+        { error: 'Server configuration error: Missing service role key. Check ENV_SETUP.md' },
+        { status: 500 }
+      );
+    }
+    
+    if (errorMessage.includes('phone_verifications')) {
+      return NextResponse.json(
+        { error: 'Database not set up. Please run the migration from supabase/migrations/004_phone_otp.sql' },
+        { status: 500 }
+      );
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to send verification code' },
+      { error: `Failed to send verification code: ${errorMessage}` },
       { status: 500 }
     );
   }

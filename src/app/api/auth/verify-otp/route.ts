@@ -123,45 +123,43 @@ export async function POST(request: NextRequest) {
       userId = profile.id;
     }
 
-    // Get user's auth email to create session
-    const { data: userData } = await adminClient.auth.admin.getUserById(userId);
+    // Get user's auth data
+    const { data: userData, error: userError } = await adminClient.auth.admin.getUserById(userId);
     
-    if (!userData?.user) {
+    if (userError || !userData?.user) {
+      console.error('Failed to retrieve user:', userError);
       return NextResponse.json(
         { error: 'Failed to retrieve user' },
         { status: 500 }
       );
     }
 
-    // Generate a magic link for the user to create a session
-    // This is a workaround since we can't directly create sessions without password
+    // Generate a session link using admin API
+    // This creates a magic link that we can use to establish a session
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const redirectTo = `${appUrl}/auth/callback?redirectTo=${encodeURIComponent('/events')}`;
+    
     const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
       type: 'magiclink',
       email: userData.user.email!,
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/callback`,
+        redirectTo,
       },
     });
 
     if (linkError || !linkData) {
       console.error('Failed to generate session link:', linkError);
       return NextResponse.json(
-        { error: 'Failed to create session' },
+        { error: `Failed to create session: ${linkError?.message || 'Unknown error'}` },
         { status: 500 }
       );
     }
 
-    // Extract the token from the link and verify it to create a session
-    const url = new URL(linkData.properties.action_link);
-    const token_hash = url.searchParams.get('token_hash');
-    const type = url.searchParams.get('type');
-
-    if (!token_hash || !type) {
-      return NextResponse.json(
-        { error: 'Failed to create session' },
-        { status: 500 }
-      );
-    }
+    // Try to extract code from the action_link for direct session creation
+    const actionUrl = new URL(linkData.properties.action_link);
+    const authCode = actionUrl.searchParams.get('code');
+    const token_hash = actionUrl.searchParams.get('token_hash');
+    const type = actionUrl.searchParams.get('type');
 
     // Create a server client to set cookies
     const cookieStore = await cookies();
@@ -178,36 +176,69 @@ export async function POST(request: NextRequest) {
               cookiesToSet.forEach(({ name, value, options }) => {
                 cookieStore.set(name, value, options);
               });
-            } catch {
+            } catch (error) {
               // Ignore errors in read-only contexts
+              console.warn('Failed to set cookie:', error);
             }
           },
         },
       }
     );
 
-    // Verify the token to create a session
-    const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
-      token_hash,
-      type: type as 'magiclink',
-    });
-
-    if (sessionError || !sessionData.session) {
-      console.error('Failed to verify session:', sessionError);
-      return NextResponse.json(
-        { error: 'Failed to create session' },
-        { status: 500 }
-      );
+    // Try to create session using authCode (preferred method)
+    if (authCode) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(authCode);
+      
+      if (!sessionError && sessionData.session) {
+        return NextResponse.json({
+          success: true,
+          message: isNewUser ? 'Account created successfully' : 'Signed in successfully',
+          isNewUser,
+          user: {
+            id: sessionData.user?.id,
+            phone: formattedPhone,
+            displayName: sessionData.user?.user_metadata?.display_name,
+          },
+        });
+      }
     }
 
+    // Fallback: try token_hash method
+    if (token_hash && type) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.verifyOtp({
+        token_hash,
+        type: type as 'magiclink',
+      });
+
+      if (!sessionError && sessionData.session) {
+        return NextResponse.json({
+          success: true,
+          message: isNewUser ? 'Account created successfully' : 'Signed in successfully',
+          isNewUser,
+          user: {
+            id: sessionData.user?.id,
+            phone: formattedPhone,
+            displayName: sessionData.user?.user_metadata?.display_name,
+          },
+        });
+      }
+      
+      if (sessionError) {
+        console.error('Failed to verify session token:', sessionError);
+      }
+    }
+
+    // If both methods fail, return the action_link for frontend redirect
+    console.warn('Direct session creation failed, returning redirect URL');
     return NextResponse.json({
       success: true,
       message: isNewUser ? 'Account created successfully' : 'Signed in successfully',
       isNewUser,
+      redirectUrl: linkData.properties.action_link,
       user: {
-        id: sessionData.user?.id,
+        id: userId,
         phone: formattedPhone,
-        displayName: sessionData.user?.user_metadata?.display_name,
+        displayName: userData.user.user_metadata?.display_name,
       },
     });
   } catch (error) {

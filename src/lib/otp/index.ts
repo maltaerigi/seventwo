@@ -29,7 +29,19 @@ const MAX_ATTEMPTS = 3;
 
 // Check if we're in mock mode
 export function isMockMode(): boolean {
-  return process.env.MOCK_OTP === 'true';
+  // If MOCK_OTP is explicitly set, use that
+  if (process.env.MOCK_OTP !== undefined) {
+    return process.env.MOCK_OTP === 'true' || process.env.MOCK_OTP === '1';
+  }
+  
+  // Default to mock mode in development if not set
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('[OTP] MOCK_OTP not set, defaulting to mock mode in development');
+    return true;
+  }
+  
+  // Production: require explicit setting
+  return false;
 }
 
 // ============================================
@@ -213,7 +225,10 @@ export async function sendOTP(phone: string): Promise<SendOTPResult> {
     }
     
     // Send SMS (or skip in mock mode)
-    if (!isMockMode()) {
+    const mockMode = isMockMode();
+    
+    if (!mockMode) {
+      // Production mode: send real SMS
       const smsResult = await sendTwilioSMS(
         formattedPhone,
         `Your Seventwo verification code is: ${code}. Expires in ${OTP_EXPIRY_MINUTES} minutes.`
@@ -223,7 +238,8 @@ export async function sendOTP(phone: string): Promise<SendOTPResult> {
         return { success: false, message: smsResult.error || 'Failed to send SMS' };
       }
     } else {
-      console.log(`[MOCK] OTP for ${formattedPhone}: ${code}`);
+      // Mock mode: just log the code
+      console.log(`[MOCK MODE] OTP for ${formattedPhone}: ${code}`);
     }
     
     return {
