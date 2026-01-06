@@ -22,7 +22,7 @@ import {
 } from '@/lib/calculations/ledger';
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<ApiResponse<EventLedgerResponse>>> {
   try {

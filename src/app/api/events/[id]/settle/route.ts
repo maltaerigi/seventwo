@@ -20,7 +20,7 @@ import { checkEventCanSettle } from '@/lib/calculations/ledger';
 import { calculateDebtsFromLedger } from '@/lib/calculations/debt';
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<ApiResponse<SettleEventResponse>>> {
   try {
@@ -250,7 +250,7 @@ export async function POST(
  * Shows what debts would be created
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<ApiResponse<{
   can_settle: boolean;

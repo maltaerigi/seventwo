@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { formatDate, formatTime, formatCurrency } from '@/lib/utils';
 import { ROUTES, EVENT_STATUS_LABELS, APP_NAME, APP_URL } from '@/constants';
 import type { Event, Profile } from '@/types';
-import { JoinEventButton } from '@/components/game/JoinEventButton';
 import { PublicEventJoinCTA } from '@/components/events/PublicEventJoinCTA';
 
 interface PublicEventPageProps {
@@ -25,7 +24,7 @@ const PRESET_COLORS: Record<string, string> = {
 
 export async function generateMetadata({ params, searchParams }: PublicEventPageProps) {
   const { slug } = await params;
-  const { token } = await searchParams;
+  const { token: _token } = await searchParams;
   const supabase = await createClient();
 
   const { data: event } = await supabase
@@ -41,7 +40,7 @@ export async function generateMetadata({ params, searchParams }: PublicEventPage
     };
   }
 
-  const typedEvent = event as Event & { host: Pick<Profile, 'display_name'> };
+  const typedEvent = event as unknown as Event & { host: Pick<Profile, 'display_name'> };
   const eventUrl = `${APP_URL}${ROUTES.EVENT_PUBLIC(slug)}`;
   const description = typedEvent.description || `Join ${typedEvent.host.display_name || 'this host'} for a poker night on ${formatDate(typedEvent.event_date)}. ${APP_NAME} - The ultimate poker night companion.`;
   
@@ -200,7 +199,7 @@ export default async function PublicEventPage({ params, searchParams }: PublicEv
   }
 
   const isFull = (participantCount || 0) >= typedEvent.max_seats;
-  const canJoin = user && !userParticipant && !isFull && typedEvent.status !== 'completed';
+  const _canJoin = user && !userParticipant && !isFull && typedEvent.status !== 'completed';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">

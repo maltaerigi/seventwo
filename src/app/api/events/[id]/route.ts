@@ -11,7 +11,7 @@ interface RouteParams {
  * GET /api/events/[id]
  * Get a single event by ID
  */
-export async function GET(request: Request, { params }: RouteParams) {
+export async function GET(_request: Request, { params }: RouteParams) {
   try {
     const { id } = await params;
     const supabase = await createClient();
@@ -132,7 +132,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
  * DELETE /api/events/[id]
  * Delete an event (host only)
  */
-export async function DELETE(request: Request, { params }: RouteParams) {
+export async function DELETE(_request: Request, { params }: RouteParams) {
   try {
     const { id } = await params;
     const supabase = await createClient();
