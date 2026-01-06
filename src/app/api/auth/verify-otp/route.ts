@@ -123,8 +123,8 @@ export async function POST(request: NextRequest) {
       userId = profile.id;
     }
 
-    // Get user's auth data
-    const { data: userData, error: userError } = await adminClient.auth.admin.getUserById(userId);
+    // Get user's auth data (userId is guaranteed to be defined at this point)
+    const { data: userData, error: userError } = await adminClient.auth.admin.getUserById(userId!);
     
     if (userError || !userData?.user) {
       console.error('Failed to retrieve user:', userError);

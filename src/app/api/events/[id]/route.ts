@@ -95,7 +95,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
           success: false, 
           error: { 
             code: ERROR_CODES.VALIDATION_ERROR, 
-            message: result.error.errors[0]?.message || 'Invalid input' 
+            message: result.error.issues[0]?.message || 'Invalid input' 
           } 
         },
         { status: 400 }

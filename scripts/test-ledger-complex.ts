@@ -7,7 +7,6 @@
  */
 
 import {
-  calculateTotalBuyIn,
   getParticipantSummary,
   calculateEventSummary,
   validateCashOut,

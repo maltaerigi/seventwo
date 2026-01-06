@@ -1,7 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ParticipantManager, JoinEventButton, CopyLinkButton } from '@/components/game';
 import { formatDate, formatTime, formatCurrency } from '@/lib/utils';

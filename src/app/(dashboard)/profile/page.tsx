@@ -52,18 +52,24 @@ export default async function ProfilePage() {
     .order('created_at', { ascending: false });
 
   // Transform to UserGameResult format
+  // Type the events relation properly
+  type EventData = { id: string; title: string; event_date: string; event_time: string };
+  
   const gameResults: UserGameResult[] = (participantData || [])
     .filter((p) => p.events)
-    .map((p) => ({
-      event_id: p.event_id,
-      event_title: (p.events as { title: string }).title,
-      event_date: (p.events as { event_date: string }).event_date,
-      event_time: (p.events as { event_time: string }).event_time,
-      buy_in_amount: p.buy_in_amount,
-      cash_out_amount: p.cash_out_amount,
-      net_profit_loss: p.net_profit_loss,
-      status: p.status,
-    }));
+    .map((p) => {
+      const event = p.events as unknown as EventData;
+      return {
+        event_id: p.event_id,
+        event_title: event.title,
+        event_date: event.event_date,
+        event_time: event.event_time,
+        buy_in_amount: p.buy_in_amount,
+        cash_out_amount: p.cash_out_amount,
+        net_profit_loss: p.net_profit_loss,
+        status: p.status,
+      };
+    });
 
   // Calculate stats
   const completedGames = gameResults.filter((g) => g.cash_out_amount !== null);

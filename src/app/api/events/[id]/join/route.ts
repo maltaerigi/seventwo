@@ -16,7 +16,7 @@ interface JoinResponse {
 }
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<ApiResponse<JoinResponse>>> {
   try {

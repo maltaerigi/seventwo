@@ -14,7 +14,7 @@ export async function POST(request: Request) {
           success: false, 
           error: { 
             code: 'VALIDATION_ERROR', 
-            message: result.error.errors[0]?.message || 'Invalid email' 
+            message: result.error.issues[0]?.message || 'Invalid email' 
           } 
         },
         { status: 400 }

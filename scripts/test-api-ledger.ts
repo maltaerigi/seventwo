@@ -11,6 +11,8 @@
  * For full API endpoint testing with a running server, see test-api-endpoints.ts
  */
 
+import type { BuyInLedgerEntry, ParticipantWithLedger } from '../src/types/database';
+
 // Simple test runner
 class TestRunner {
   private tests: Array<{ name: string; fn: () => Promise<void> | void }> = [];
@@ -114,9 +116,7 @@ runner.test('Validation: Record Rebuy Schema', async () => {
 // Test ledger calculations
 runner.test('Ledger: Calculate Total Buy-In', async () => {
   const { calculateTotalBuyIn } = await import('../src/lib/calculations/ledger');
-  const type = await import('../src/types/database');
-
-  const ledger: type.BuyInLedgerEntry[] = [
+  const ledger: BuyInLedgerEntry[] = [
     { id: '1', participant_id: 'p1', amount: 100, is_rebuy: false, notes: null, created_at: new Date().toISOString() },
     { id: '2', participant_id: 'p1', amount: 50, is_rebuy: true, notes: null, created_at: new Date().toISOString() },
   ];
@@ -127,9 +127,7 @@ runner.test('Ledger: Calculate Total Buy-In', async () => {
 
 runner.test('Ledger: Get Participant Summary', async () => {
   const { getParticipantSummary } = await import('../src/lib/calculations/ledger');
-  const type = await import('../src/types/database');
-
-  const participant: type.ParticipantWithLedger = {
+  const participant: ParticipantWithLedger = {
     id: 'p1',
     event_id: 'e1',
     user_id: 'u1',
@@ -156,9 +154,7 @@ runner.test('Ledger: Get Participant Summary', async () => {
 
 runner.test('Ledger: Calculate Event Summary', async () => {
   const { calculateEventSummary } = await import('../src/lib/calculations/ledger');
-  const type = await import('../src/types/database');
-
-  const participants: type.ParticipantWithLedger[] = [
+  const participants: ParticipantWithLedger[] = [
     {
       id: 'p1',
       event_id: 'e1',
@@ -203,10 +199,8 @@ runner.test('Ledger: Calculate Event Summary', async () => {
 
 runner.test('Ledger: Validate Cash-Out', async () => {
   const { validateCashOut } = await import('../src/lib/calculations/ledger');
-  const type = await import('../src/types/database');
-
   // Create a scenario with multiple participants so cash-out can be validated
-  const participant1: type.ParticipantWithLedger = {
+  const participant1: ParticipantWithLedger = {
     id: 'p1',
     event_id: 'e1',
     user_id: 'u1',
@@ -224,7 +218,7 @@ runner.test('Ledger: Validate Cash-Out', async () => {
     ],
   };
 
-  const participant2: type.ParticipantWithLedger = {
+  const participant2: ParticipantWithLedger = {
     id: 'p2',
     event_id: 'e1',
     user_id: 'u2',
@@ -249,7 +243,7 @@ runner.test('Ledger: Validate Cash-Out', async () => {
   }
 
   // Test that cash-out already recorded fails
-  const alreadyCashedOut: type.ParticipantWithLedger = {
+  const alreadyCashedOut: ParticipantWithLedger = {
     ...participant1,
     cash_out_amount: 150,
     cashed_out_at: new Date().toISOString(),
@@ -265,9 +259,7 @@ runner.test('Ledger: Validate Cash-Out', async () => {
 
 runner.test('Debt: Calculate Debts from Ledger', async () => {
   const { calculateDebtsFromLedger } = await import('../src/lib/calculations/debt');
-  const type = await import('../src/types/database');
-
-  const participants: type.ParticipantWithLedger[] = [
+  const participants: ParticipantWithLedger[] = [
     {
       id: 'p1',
       event_id: 'e1',
@@ -313,10 +305,8 @@ runner.test('Debt: Calculate Debts from Ledger', async () => {
 
 runner.test('Settlement: Check Event Can Settle', async () => {
   const { checkEventCanSettle } = await import('../src/lib/calculations/ledger');
-  const type = await import('../src/types/database');
-
   // Test with all cashed out
-  const allCashedOut: type.ParticipantWithLedger[] = [
+  const allCashedOut: ParticipantWithLedger[] = [
     {
       id: 'p1',
       event_id: 'e1',

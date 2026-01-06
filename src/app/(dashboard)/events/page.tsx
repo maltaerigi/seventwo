@@ -38,7 +38,7 @@ export default async function EventsPage() {
 
   const hosted = (hostedEvents || []) as Event[];
   const participating = (participatingEvents || [])
-    .map(p => p.event)
+    .map(p => p.event as unknown as Event | null)
     .filter((e): e is Event => e !== null);
 
   const hasEvents = hosted.length > 0 || participating.length > 0;
