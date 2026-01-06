@@ -1,11 +1,11 @@
 /**
- * Event Components
+ * Events Components
  * 
- * Re-exports all event-related components.
+ * Re-exports all event-related components for convenient importing.
  */
 
-export { EventForm } from './EventForm';
-export { EventCard } from './EventCard';
 export { CoverPhotoUpload } from './CoverPhotoUpload';
+export { EventCard } from './EventCard';
+export { EventForm } from './EventForm';
 export { GameSettings } from './GameSettings';
-
+export { PublicEventJoinCTA } from './PublicEventJoinCTA';

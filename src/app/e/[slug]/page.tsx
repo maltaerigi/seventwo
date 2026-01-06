@@ -4,11 +4,14 @@ import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatDate, formatTime, formatCurrency } from '@/lib/utils';
-import { ROUTES, EVENT_STATUS_LABELS, APP_NAME } from '@/constants';
+import { ROUTES, EVENT_STATUS_LABELS, APP_NAME, APP_URL } from '@/constants';
 import type { Event, Profile } from '@/types';
+import { JoinEventButton } from '@/components/game/JoinEventButton';
+import { PublicEventJoinCTA } from '@/components/events/PublicEventJoinCTA';
 
 interface PublicEventPageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ token?: string }>;
 }
 
 // Preset cover colors
@@ -20,28 +23,67 @@ const PRESET_COLORS: Record<string, string> = {
   'gold': 'from-amber-700 to-amber-900',
 };
 
-export async function generateMetadata({ params }: PublicEventPageProps) {
+export async function generateMetadata({ params, searchParams }: PublicEventPageProps) {
   const { slug } = await params;
+  const { token } = await searchParams;
   const supabase = await createClient();
 
   const { data: event } = await supabase
     .from('events')
-    .select('title, description')
+    .select('title, description, cover_photo_url, event_date, location, host:profiles!events_host_id_fkey(display_name)')
     .eq('slug', slug)
     .single();
 
   if (!event) {
-    return { title: 'Event Not Found' };
+    return { 
+      title: 'Event Not Found',
+      description: 'The event you are looking for could not be found.',
+    };
   }
 
+  const typedEvent = event as Event & { host: Pick<Profile, 'display_name'> };
+  const eventUrl = `${APP_URL}${ROUTES.EVENT_PUBLIC(slug)}`;
+  const description = typedEvent.description || `Join ${typedEvent.host.display_name || 'this host'} for a poker night on ${formatDate(typedEvent.event_date)}. ${APP_NAME} - The ultimate poker night companion.`;
+  
+  // Get cover image URL
+  const coverImage = typedEvent.cover_photo_url && !typedEvent.cover_photo_url.startsWith('preset:')
+    ? typedEvent.cover_photo_url
+    : `${APP_URL}/og-image.png`; // Fallback to default OG image
+
   return {
-    title: event.title,
-    description: event.description || `Join this poker night on ${APP_NAME}`,
+    title: `${typedEvent.title} | ${APP_NAME}`,
+    description,
+    openGraph: {
+      title: typedEvent.title,
+      description,
+      url: eventUrl,
+      siteName: APP_NAME,
+      images: [
+        {
+          url: coverImage,
+          width: 1200,
+          height: 630,
+          alt: typedEvent.title,
+        },
+      ],
+      locale: 'en_US',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: typedEvent.title,
+      description,
+      images: [coverImage],
+    },
+    alternates: {
+      canonical: eventUrl,
+    },
   };
 }
 
-export default async function PublicEventPage({ params }: PublicEventPageProps) {
+export default async function PublicEventPage({ params, searchParams }: PublicEventPageProps) {
   const { slug } = await params;
+  const { token } = await searchParams;
   const supabase = await createClient();
 
   // Get current user (optional)
@@ -67,8 +109,57 @@ export default async function PublicEventPage({ params }: PublicEventPageProps) 
 
   const typedEvent = event as Event & { host: Pick<Profile, 'id' | 'display_name' | 'avatar_url'> };
   
-  // For private events, check if user has access
-  // (In a full implementation, we'd check if user is a participant or has the share token)
+  // Check access for private events
+  let hasAccess = true;
+  if (typedEvent.is_private) {
+    // Check if user is the host
+    if (user?.id === typedEvent.host_id) {
+      hasAccess = true;
+    }
+    // Check if user is a participant
+    else if (user) {
+      const { data: participant } = await supabase
+        .from('event_participants')
+        .select('id')
+        .eq('event_id', typedEvent.id)
+        .eq('user_id', user.id)
+        .single();
+      hasAccess = !!participant;
+    }
+    // Check share token
+    else if (token && typedEvent.share_token === token) {
+      hasAccess = true;
+    } else {
+      hasAccess = false;
+    }
+  }
+
+  // If private event and no access, show limited info
+  if (typedEvent.is_private && !hasAccess) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+        <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+          <div className="rounded-xl border border-slate-200 bg-white p-8 dark:border-slate-700 dark:bg-slate-800">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+              Private Event
+            </h1>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">
+              This is a private event. You need to be invited to view the details.
+            </p>
+            {!user && (
+              <div className="mt-6">
+                <Button asChild className="bg-amber-500 text-slate-900 hover:bg-amber-400">
+                  <Link href={`${ROUTES.LOGIN}?redirectTo=${ROUTES.EVENT_PUBLIC(slug)}${token ? `&token=${token}` : ''}`}>
+                    Sign In to Access
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Cover styling
   const isPreset = typedEvent.cover_photo_url?.startsWith('preset:');
@@ -81,6 +172,35 @@ export default async function PublicEventPage({ params }: PublicEventPageProps) 
     .select('*', { count: 'exact', head: true })
     .eq('event_id', typedEvent.id)
     .in('status', ['approved', 'checked_in']);
+
+  // Get limited participant preview (first 5 for public view)
+  const { data: participantPreview } = await supabase
+    .from('event_participants')
+    .select(`
+      profile:profiles!event_participants_user_id_fkey (
+        id,
+        display_name,
+        avatar_url
+      )
+    `)
+    .eq('event_id', typedEvent.id)
+    .in('status', ['approved', 'checked_in'])
+    .limit(5);
+
+  // Check if current user is already a participant
+  let userParticipant = null;
+  if (user) {
+    const { data: participant } = await supabase
+      .from('event_participants')
+      .select('id, status')
+      .eq('event_id', typedEvent.id)
+      .eq('user_id', user.id)
+      .single();
+    userParticipant = participant;
+  }
+
+  const isFull = (participantCount || 0) >= typedEvent.max_seats;
+  const canJoin = user && !userParticipant && !isFull && typedEvent.status !== 'completed';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
@@ -162,22 +282,74 @@ export default async function PublicEventPage({ params }: PublicEventPageProps) 
             <p className="mt-1 font-semibold text-slate-900 dark:text-white">
               {participantCount || 0} / {typedEvent.max_seats}
             </p>
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              {(typedEvent.max_seats - (participantCount || 0))} spots left
+            <p className={`text-sm ${isFull ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+              {isFull ? 'Event full' : `${typedEvent.max_seats - (participantCount || 0)} spots left`}
             </p>
           </div>
         </div>
 
-        {/* Location - shown only if logged in or event is public */}
-        {!typedEvent.is_private && (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-            <div className="flex items-start gap-3">
-              <span className="text-xl">📍</span>
-              <div>
+        {/* Location - gated content */}
+        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+          <div className="flex items-start gap-3">
+            <span className="text-xl">📍</span>
+            <div className="flex-1">
+              {user || hasAccess ? (
                 <p className="font-medium text-slate-900 dark:text-white">
-                  {user ? typedEvent.location : 'Location visible after joining'}
+                  {typedEvent.location}
                 </p>
-              </div>
+              ) : (
+                <>
+                  <p className="font-medium text-slate-900 dark:text-white">
+                    Location
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Sign in to see the location
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Participant Preview - gated */}
+        {participantPreview && participantPreview.length > 0 && (user || hasAccess) && (
+          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+            <h3 className="mb-3 text-sm font-semibold text-slate-900 dark:text-white">
+              Players ({participantCount || 0})
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {participantPreview.map((p) => {
+                const profile = p.profile as Pick<Profile, 'id' | 'display_name' | 'avatar_url'> | null;
+                if (!profile) return null;
+                return (
+                  <div
+                    key={profile.id}
+                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    {profile.avatar_url ? (
+                      <img
+                        src={profile.avatar_url}
+                        alt={profile.display_name || 'Player'}
+                        className="h-6 w-6 rounded-full"
+                      />
+                    ) : (
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-xs font-semibold text-slate-900">
+                        {(profile.display_name || '?')[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-sm text-slate-700 dark:text-slate-300">
+                      {profile.display_name || 'Anonymous'}
+                    </span>
+                  </div>
+                );
+              })}
+              {(participantCount || 0) > 5 && (
+                <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+                  <span className="text-sm text-slate-500 dark:text-slate-400">
+                    +{(participantCount || 0) - 5} more
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -192,27 +364,18 @@ export default async function PublicEventPage({ params }: PublicEventPageProps) 
           </div>
         )}
 
-        {/* CTA */}
-        <div className="mt-8 rounded-xl border border-amber-500/30 bg-amber-500/10 p-6 text-center">
-          {user ? (
-            <>
-              <p className="text-slate-700 dark:text-slate-300">Ready to play?</p>
-              <Button className="mt-4 bg-amber-500 text-slate-900 hover:bg-amber-400">
-                Join This Event
-              </Button>
-            </>
-          ) : (
-            <>
-              <p className="text-slate-700 dark:text-slate-300">
-                Sign in to join this poker night
-              </p>
-              <Button asChild className="mt-4 bg-amber-500 text-slate-900 hover:bg-amber-400">
-                <Link href={`${ROUTES.LOGIN}?redirectTo=${ROUTES.EVENT_PUBLIC(slug)}`}>
-                  Sign In to Join
-                </Link>
-              </Button>
-            </>
-          )}
+        {/* CTA - Enhanced with proper join functionality */}
+        <div className="mt-8">
+          <PublicEventJoinCTA
+            eventId={typedEvent.id}
+            eventSlug={slug}
+            isLoggedIn={!!user}
+            isParticipant={!!userParticipant}
+            participantStatus={userParticipant?.status}
+            isFull={isFull}
+            eventStatus={typedEvent.status}
+            requiresApproval={typedEvent.requires_approval}
+          />
         </div>
       </main>
 
@@ -225,4 +388,3 @@ export default async function PublicEventPage({ params }: PublicEventPageProps) 
     </div>
   );
 }
-

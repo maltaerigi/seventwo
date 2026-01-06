@@ -3,9 +3,10 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ParticipantManager, JoinEventButton, CopyLinkButton } from '@/components/game';
 import { formatDate, formatTime, formatCurrency } from '@/lib/utils';
 import { ROUTES, EVENT_STATUS_LABELS } from '@/constants';
-import type { Event, Profile } from '@/types';
+import type { Event, Profile, ParticipantWithLedger, EventStatus } from '@/types';
 
 interface EventDetailPageProps {
   params: Promise<{ id: string }>;
@@ -51,27 +52,38 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
   const typedEvent = event as Event & { host: Pick<Profile, 'id' | 'display_name' | 'avatar_url'> };
   const isHost = typedEvent.host_id === user.id;
 
-  // Fetch participants
-  const { data: participants } = await supabase
+  // Fetch participants with ledger data
+  const { data: participantsData } = await supabase
     .from('event_participants')
     .select(`
       *,
-      profile:profiles (
+      profile:profiles!event_participants_user_id_fkey (
         id,
         display_name,
         avatar_url
-      )
+      ),
+      buy_in_ledger (*)
     `)
     .eq('event_id', id)
     .order('created_at', { ascending: true });
 
+  // Transform to ParticipantWithLedger
+  const participants: ParticipantWithLedger[] = (participantsData || []).map(p => ({
+    ...p,
+    profile: p.profile || { id: p.user_id, display_name: null, avatar_url: null },
+    buy_in_ledger: p.buy_in_ledger || [],
+  }));
+
   // Check if current user is a participant
-  const userParticipant = participants?.find(p => p.user_id === user.id);
+  const userParticipant = participants.find(p => p.user_id === user.id);
 
   // Cover styling
   const isPreset = typedEvent.cover_photo_url?.startsWith('preset:');
   const presetId = isPreset ? typedEvent.cover_photo_url?.replace('preset:', '') : null;
   const presetColor = presetId ? PRESET_COLORS[presetId] : null;
+
+  // Share URL
+  const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL || ''}/e/${typedEvent.slug}`;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
@@ -102,7 +114,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         </Link>
 
         {/* Edit button (host only) */}
-        {isHost && (
+        {isHost && typedEvent.status !== 'completed' && (
           <Link
             href={`${ROUTES.EVENT_DETAIL(id)}/edit`}
             className="absolute right-4 top-4 flex h-10 items-center gap-2 rounded-full bg-black/30 px-4 text-sm text-white backdrop-blur transition-colors hover:bg-black/50"
@@ -116,7 +128,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
       </div>
 
       {/* Content */}
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <main className="mx-auto max-w-5xl px-4 py-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-start justify-between">
@@ -144,10 +156,24 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         </div>
 
         <div className="grid gap-8 lg:grid-cols-3">
-          {/* Main Info */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Date, Time, Location */}
+          {/* Main Content - Game Management */}
+          <div className="lg:col-span-2">
+            <ParticipantManager
+              eventId={id}
+              eventStatus={typedEvent.status as EventStatus}
+              isHost={isHost}
+              participants={participants}
+              defaultBuyIn={typedEvent.big_blind * 100} // Default buy-in = 100 big blinds
+            />
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Event Info */}
             <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
+              <h3 className="mb-4 font-semibold text-slate-900 dark:text-white">
+                📋 Event Details
+              </h3>
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
                   <span className="text-xl">📅</span>
@@ -185,69 +211,32 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
             {/* Description */}
             {typedEvent.description && (
               <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-                <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">About</h2>
-                <p className="whitespace-pre-wrap text-slate-600 dark:text-slate-400">
+                <h3 className="mb-3 font-semibold text-slate-900 dark:text-white">About</h3>
+                <p className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-400">
                   {typedEvent.description}
                 </p>
               </div>
             )}
-          </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
             {/* Join/RSVP */}
-            {!isHost && !userParticipant && (
+            {!isHost && !userParticipant && typedEvent.status !== 'completed' && (
               <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-                <Button className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400">
-                  Join Event
-                </Button>
-                <p className="mt-2 text-center text-xs text-slate-500">
-                  {typedEvent.requires_approval ? 'Host approval required' : 'Join instantly'}
-                </p>
+                <JoinEventButton 
+                  eventId={id} 
+                  requiresApproval={typedEvent.requires_approval}
+                />
               </div>
             )}
 
-            {/* Participants */}
-            <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-              <h2 className="mb-4 font-semibold text-slate-900 dark:text-white">
-                Players ({participants?.length || 0}/{typedEvent.max_seats})
-              </h2>
-              
-              {participants && participants.length > 0 ? (
-                <ul className="space-y-3">
-                  {participants.map((p) => (
-                    <li key={p.id} className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-sm font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
-                        {p.profile?.display_name?.charAt(0).toUpperCase() || '?'}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-900 dark:text-white">
-                          {p.profile?.display_name || 'Anonymous'}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {p.status === 'checked_in' ? 'Checked in' : p.status}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-slate-500">No players yet</p>
-              )}
-            </div>
-
             {/* Share */}
             <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
-              <h2 className="mb-4 font-semibold text-slate-900 dark:text-white">Share</h2>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  // Will implement copy to clipboard
-                }}
-              >
-                Copy Event Link
-              </Button>
+              <h3 className="mb-4 font-semibold text-slate-900 dark:text-white">🔗 Share</h3>
+              <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-900">
+                <p className="truncate text-xs text-slate-500">
+                  {shareUrl}
+                </p>
+              </div>
+              <CopyLinkButton url={shareUrl} />
             </div>
           </div>
         </div>
@@ -255,4 +244,3 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     </div>
   );
 }
-
